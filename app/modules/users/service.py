@@ -15,24 +15,32 @@ class UserService:
         self._tokens = TokenService(self._repo)
 
     async def get_or_create(
-        self, telegram_id: int, username: str | None
+        self,
+        telegram_id: int,
+        username: str | None,
+        first_name: str | None = None,
     ) -> tuple[User, bool]:
         """Return the user for a telegram id, creating one on first contact.
 
+        On every call the profile snapshots (username, first name) are refreshed,
+        so the username-based send flow can find members by their current handle.
         Returns ``(user, created)``.
         """
         user = await self._repo.get_by_telegram_id(telegram_id)
         if user is not None:
-            # Keep username fresh for support/debugging (not exposed to others).
-            if username and user.username != username:
-                user.username = username
+            # Keep snapshots fresh (used only for member lookup / display to self).
+            if user.username_snapshot != username:
+                user.username_snapshot = username
+            if first_name and user.first_name_snapshot != first_name:
+                user.first_name_snapshot = first_name
             return user, False
 
         anonymous_id = await self._tokens.unique_anonymous_id()
         public_token = await self._tokens.unique_public_token()
         user = User(
             telegram_id=telegram_id,
-            username=username,
+            username_snapshot=username,
+            first_name_snapshot=first_name,
             anonymous_id=anonymous_id,
             public_token=public_token,
         )
@@ -44,6 +52,12 @@ class UserService:
 
     async def get_by_public_token(self, token: str) -> User | None:
         return await self._repo.get_by_public_token(token)
+
+    async def find_by_username(self, normalized_username: str) -> User | None:
+        """Find a bot member by their (normalized, @-stripped) Telegram username."""
+        if not normalized_username:
+            return None
+        return await self._repo.get_by_username_snapshot(normalized_username)
 
     async def rotate_public_token(self, user: User) -> str:
         """Issue a fresh public token (invalidates the old deep link)."""

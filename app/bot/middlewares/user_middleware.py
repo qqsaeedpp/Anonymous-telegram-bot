@@ -21,6 +21,8 @@ class UserMiddleware(BaseMiddleware):
         session = data.get("session")
         if tg_user is not None and session is not None and not tg_user.is_bot:
             service = UserService(session)
-            user, _ = await service.get_or_create(tg_user.id, tg_user.username)
+            user, _ = await service.get_or_create(
+                tg_user.id, tg_user.username, tg_user.first_name
+            )
             data["user"] = user
         return await handler(event, data)

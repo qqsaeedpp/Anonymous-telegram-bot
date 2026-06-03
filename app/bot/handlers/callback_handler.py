@@ -1,17 +1,18 @@
-"""Callbacks for viewing a message (seen) and toggling seen notifications."""
+"""Callback for viewing ("seeing") an anonymous message.
+
+The recipient receives only a notification + a single "view" button. Pressing
+it reveals the text (edited in place), swaps in the after-view keyboard, and —
+only the first time — notifies the author that their message was seen.
+"""
 from __future__ import annotations
 
 from aiogram import Router
 from aiogram.types import CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.bot.callbacks import SeenToggleCb, ViewCb
-from app.bot.keyboards.main_menu import main_menu_keyboard
-from app.bot.keyboards.message_actions import seen_only_keyboard
+from app.bot.callbacks import ViewCb
+from app.bot.keyboards.message_actions import after_view_keyboard
 from app.bot.texts import fa
-from app.modules.blocks.service import BlockService
-from app.modules.conversations.service import ConversationService
-from app.modules.messages.models import MessageDirection
 from app.modules.messages.service import MessageService
 from app.modules.notifications.service import NotificationService
 from app.modules.users.models import User
@@ -28,50 +29,35 @@ async def on_view(
     session: AsyncSession,
     user: User,
 ) -> None:
-    message = await MessageService(session).mark_seen(callback_data.message_id, user)
+    result = await MessageService(session).view(callback_data.message_id, user)
 
-    if message is not None:
-        conversation = await ConversationService(session).get_by_id(
-            message.conversation_id
-        )
-        if conversation is not None:
-            # The author of this message is the one to be notified of "seen".
-            if message.direction == MessageDirection.TO_RECIPIENT:
-                author_id = conversation.sender_user_id
-            else:
-                author_id = conversation.recipient_user_id
+    # ``None`` means the viewer is not the rightful owner (anti-IDOR) or the
+    # message/conversation vanished. Stay silent about details.
+    if result is None:
+        await query.answer(fa.CONVERSATION_NOT_FOUND, show_alert=True)
+        return
 
-            author = await UserService(session).get_by_id(author_id)
-            if author is not None and author.seen_notifications_enabled:
-                notifier = NotificationService(bot, MessageService(session))
-                await notifier.notify_seen(author.telegram_id)
+    # Reveal the text in place, then offer reply (+ block for the recipient).
+    body = fa.revealed_message(
+        sender_label=result.author_label,
+        text=result.safe_text,
+        is_reply=result.is_reply,
+    )
+    keyboard = after_view_keyboard(
+        conversation_id=result.conversation_id,
+        can_block=result.viewer_is_recipient,
+        blocked=result.is_blocked,
+    )
+    try:
+        await query.message.edit_text(body, reply_markup=keyboard)
+    except Exception:  # noqa: BLE001 - edit may fail if content is unchanged
+        pass
 
-            blocked = await BlockService(session).is_blocked(
-                user.id, conversation.sender_anonymous_id
-            )
-            try:
-                await query.message.edit_reply_markup(
-                    reply_markup=seen_only_keyboard(conversation.id, blocked)
-                )
-            except Exception:  # noqa: BLE001 - markup may be unchanged
-                pass
+    # Notify the author exactly once, and only if they opted in.
+    if result.should_notify_seen:
+        author = await UserService(session).get_by_id(result.author_user_id)
+        if author is not None and author.seen_notifications_enabled:
+            notifier = NotificationService(bot, MessageService(session))
+            await notifier.notify_seen(author.telegram_id)
 
     await query.answer(fa.MESSAGE_SEEN_ACK)
-
-
-@router.callback_query(SeenToggleCb.filter())
-async def on_toggle_seen(
-    query: CallbackQuery,
-    callback_data: SeenToggleCb,
-    session: AsyncSession,
-    user: User,
-) -> None:
-    enabled = bool(callback_data.enable)
-    await UserService(session).set_seen_notifications(user, enabled)
-    try:
-        await query.message.edit_reply_markup(
-            reply_markup=main_menu_keyboard(enabled)
-        )
-    except Exception:  # noqa: BLE001
-        pass
-    await query.answer(fa.seen_setting_status(enabled))

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from aiogram import Bot
 
-from app.bot.keyboards.message_actions import message_actions_keyboard
+from app.bot.keyboards.message_actions import view_only_keyboard
 from app.bot.texts import fa
 from app.modules.messages.schemas import SendOutcome
 from app.modules.messages.service import MessageService
@@ -30,16 +30,13 @@ class NotificationService:
             # Target has blocked the sender. Silently drop (no leak to sender).
             return
 
-        header = fa.NEW_REPLY_HEADER if is_reply else fa.NEW_MESSAGE_HEADER
-        body = fa.incoming_message(
-            header=header,
-            sender_label=outcome.sender_anonymous_id,
-            text=outcome.safe_text,
+        # IMPORTANT: do NOT include the message text here. The recipient only
+        # sees a notification with the sender's anonymous label; the text is
+        # revealed only after they press "view".
+        body = fa.new_message_alert(
+            sender_label=outcome.sender_anonymous_id, is_reply=is_reply
         )
-        keyboard = message_actions_keyboard(
-            message_id=outcome.message_id,
-            conversation_id=outcome.conversation_id,
-        )
+        keyboard = view_only_keyboard(message_id=outcome.message_id)
         try:
             sent = await self._bot.send_message(
                 chat_id=target_telegram_id,

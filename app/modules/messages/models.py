@@ -5,6 +5,7 @@ import enum
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     DateTime,
     Enum,
     ForeignKey,
@@ -63,4 +64,10 @@ class Message(Base, TimestampMixin):
 
     seen_at: Mapped[object | None] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+
+    # Guards against sending the "seen" notification more than once if the
+    # recipient opens the message again.
+    seen_notification_sent: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
     )

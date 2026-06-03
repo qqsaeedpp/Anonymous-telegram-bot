@@ -9,6 +9,7 @@ import asyncio
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.session.aiohttp import AiohttpSession
+from aiogram.types import BotCommand
 
 from app.bot.handlers import build_root_router
 from app.bot.middlewares.db_session_middleware import DbSessionMiddleware
@@ -64,6 +65,10 @@ async def run() -> None:
     logger.info("Bot starting (polling)...")
     try:
         await bot.delete_webhook(drop_pending_updates=True)
+        # Register the /start command so it appears in Telegram's command menu.
+        await bot.set_my_commands(
+            [BotCommand(command="start", description="شروع کار با ربات")]
+        )
         await dp.start_polling(bot)
     finally:
         await bot.session.close()

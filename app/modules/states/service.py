@@ -30,17 +30,25 @@ class StateService:
         context = json.loads(row.context_json) if row.context_json else {}
         return CurrentState(kind=row.state, context=context)
 
-    async def set_composing(self, user_id: int, recipient_user_id: int) -> None:
+    async def set_waiting_for_target_username(self, user_id: int) -> None:
+        await self._repo.upsert(
+            user_id, UserStateKind.WAITING_FOR_TARGET_USERNAME, None
+        )
+
+    async def set_waiting_for_message(
+        self, user_id: int, recipient_user_id: int
+    ) -> None:
+        """Target resolved (via link or username); now expect the message text."""
         await self._repo.upsert(
             user_id,
-            UserStateKind.COMPOSING,
+            UserStateKind.WAITING_FOR_ANONYMOUS_MESSAGE,
             json.dumps({"recipient_user_id": recipient_user_id}),
         )
 
     async def set_replying(self, user_id: int, conversation_id: int) -> None:
         await self._repo.upsert(
             user_id,
-            UserStateKind.REPLYING,
+            UserStateKind.WAITING_FOR_REPLY,
             json.dumps({"conversation_id": conversation_id}),
         )
 

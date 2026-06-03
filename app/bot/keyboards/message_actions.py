@@ -1,54 +1,47 @@
-"""Inline keyboard shown beneath a delivered anonymous message."""
+"""Inline keyboards for delivered anonymous messages.
+
+- ``view_only_keyboard``: shown on arrival — a single "view" button. The text
+  is hidden until the recipient presses it.
+- ``after_view_keyboard``: shown after viewing — reply, plus block/unblock for
+  the conversation recipient only.
+"""
 from __future__ import annotations
 
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from app.bot.callbacks import BlockCb, ReplyCb, ViewCb
+from app.bot.callbacks import BlockCb, ReplyCb, UnblockCb, ViewCb
 from app.bot.texts import fa
 
 
-def message_actions_keyboard(
-    message_id: int, conversation_id: int
-) -> InlineKeyboardMarkup:
+def view_only_keyboard(message_id: int) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.button(text=fa.BTN_VIEW, callback_data=ViewCb(message_id=message_id))
-    builder.button(
-        text=fa.BTN_REPLY, callback_data=ReplyCb(conversation_id=conversation_id)
-    )
-    builder.button(
-        text=fa.BTN_BLOCK, callback_data=BlockCb(conversation_id=conversation_id)
-    )
-    builder.adjust(1, 2)
+    builder.adjust(1)
     return builder.as_markup()
 
 
-def seen_only_keyboard(
-    conversation_id: int, blocked: bool
+def after_view_keyboard(
+    conversation_id: int, can_block: bool, blocked: bool
 ) -> InlineKeyboardMarkup:
-    """Keyboard shown after a message has been viewed (reply + block/unblock)."""
-    from app.bot.callbacks import UnblockCb
-
+    """Keyboard shown after a message has been viewed."""
     builder = InlineKeyboardBuilder()
     builder.button(
         text=fa.BTN_REPLY, callback_data=ReplyCb(conversation_id=conversation_id)
     )
-    if blocked:
-        builder.button(
-            text=fa.BTN_UNBLOCK,
-            callback_data=UnblockCb(conversation_id=conversation_id),
-        )
-    else:
-        builder.button(
-            text=fa.BTN_BLOCK,
-            callback_data=BlockCb(conversation_id=conversation_id),
-        )
+    if can_block:
+        if blocked:
+            builder.button(
+                text=fa.BTN_UNBLOCK,
+                callback_data=UnblockCb(conversation_id=conversation_id),
+            )
+        else:
+            builder.button(
+                text=fa.BTN_BLOCK,
+                callback_data=BlockCb(conversation_id=conversation_id),
+            )
     builder.adjust(2)
     return builder.as_markup()
 
 
-__all__ = [
-    "message_actions_keyboard",
-    "seen_only_keyboard",
-    "InlineKeyboardButton",
-]
+__all__ = ["view_only_keyboard", "after_view_keyboard"]

@@ -16,13 +16,9 @@ from app.modules.users.models import User
 router = Router(name="start")
 
 
-async def _send_welcome(message: Message, user: User, settings: Settings) -> None:
-    link = settings.deep_link(user.public_token)
-    await message.answer(fa.WELCOME)
-    await message.answer(
-        fa.your_link(link),
-        reply_markup=main_menu_keyboard(user.seen_notifications_enabled),
-    )
+async def _send_main_menu(message: Message) -> None:
+    """Welcome text + the two glass (inline) buttons."""
+    await message.answer(fa.WELCOME, reply_markup=main_menu_keyboard())
 
 
 @router.message(CommandStart(deep_link=True))
@@ -38,15 +34,16 @@ async def start_with_deep_link(
 
     if not resolution.is_valid or resolution.recipient is None:
         await message.answer(fa.INVALID_LINK)
-        await _send_welcome(message, user, settings)
+        await _send_main_menu(message)
         return
 
     recipient = resolution.recipient
     if recipient.id == user.id:
         await message.answer(fa.CANNOT_MESSAGE_SELF)
+        await _send_main_menu(message)
         return
 
-    await StateService(session).set_composing(user.id, recipient.id)
+    await StateService(session).set_waiting_for_message(user.id, recipient.id)
     await message.answer(fa.compose_prompt(recipient.anonymous_id))
 
 
@@ -58,4 +55,4 @@ async def start_plain(
     settings: Settings,
 ) -> None:
     await StateService(session).clear(user.id)
-    await _send_welcome(message, user, settings)
+    await _send_main_menu(message)

@@ -18,8 +18,9 @@ from app.modules.messages.models import (
     MessageStatus,
 )
 from app.modules.messages.repository import MessageRepository
-from app.modules.messages.schemas import SendOutcome
+from app.modules.messages.schemas import SendOutcome, ViewResult
 from app.modules.users.models import User
+from app.modules.users.repository import UserRepository
 from app.utils.text_sanitizer import sanitize_text
 
 
@@ -58,6 +59,7 @@ class MessageService:
             sender_anonymous_id=sender.anonymous_id,
             safe_text=safe_text,
             delivered=delivered,
+            is_reply=False,
         )
 
     async def send_reply(
@@ -77,10 +79,11 @@ class MessageService:
             direction = MessageDirection.TO_RECIPIENT
             target_user_id = conversation.recipient_user_id
 
-        # Block check: the target must not have blocked this sender label.
-        delivered = not await self._blocks.is_blocked(
-            target_user_id, conversation.sender_anonymous_id
-        )
+        # The target sees the *author's* anonymous label (i.e. the replier's).
+        author_label = replier.anonymous_id
+
+        # Block check: the target must not have blocked the author's label.
+        delivered = not await self._blocks.is_blocked(target_user_id, author_label)
 
         message = await self._repo.add(
             Message(
@@ -96,9 +99,10 @@ class MessageService:
             message_id=message.id,
             conversation_id=conversation.id,
             target_user_id=target_user_id,
-            sender_anonymous_id=conversation.sender_anonymous_id,
+            sender_anonymous_id=author_label,
             safe_text=safe_text,
             delivered=delivered,
+            is_reply=True,
         )
 
     async def attach_telegram_message_id(
@@ -110,10 +114,12 @@ class MessageService:
             message.status = MessageStatus.DELIVERED
             await self._session.flush()
 
-    async def mark_seen(self, message_id: int, viewer: User) -> Message | None:
-        """Mark a message as seen, enforcing that the viewer owns it.
+    async def view(self, message_id: int, viewer: User) -> ViewResult | None:
+        """Reveal a message to its rightful owner, marking it seen (once).
 
-        Returns the message if it was newly marked seen, else None.
+        Enforces ownership (anti-IDOR). The text is returned every time the
+        owner opens it, but the "seen" notification is flagged for sending only
+        the first time. Returns ``None`` if the viewer is not authorized.
         """
         message = await self._repo.get_by_id(message_id)
         if message is None:
@@ -123,21 +129,46 @@ class MessageService:
         if conversation is None:
             return None
 
-        # Ownership/authorization check (prevents IDOR via crafted callback_data).
-        is_owner = (
-            message.direction == MessageDirection.TO_RECIPIENT
-            and viewer.id == conversation.recipient_user_id
-        ) or (
-            message.direction == MessageDirection.TO_SENDER
-            and viewer.id == conversation.sender_user_id
+        is_to_recipient = message.direction == MessageDirection.TO_RECIPIENT
+        if is_to_recipient:
+            if viewer.id != conversation.recipient_user_id:
+                return None
+            author_id = conversation.sender_user_id
+        else:
+            if viewer.id != conversation.sender_user_id:
+                return None
+            author_id = conversation.recipient_user_id
+
+        author = await UserRepository(self._session).get_by_id(author_id)
+        author_label = (
+            author.anonymous_id if author else conversation.sender_anonymous_id
         )
-        if not is_owner:
-            return None
 
-        if message.status == MessageStatus.SEEN:
-            return None
+        if message.status != MessageStatus.SEEN:
+            message.status = MessageStatus.SEEN
+            message.seen_at = datetime.now(timezone.utc)
 
-        message.status = MessageStatus.SEEN
-        message.seen_at = datetime.now(timezone.utc)
+        should_notify_seen = not message.seen_notification_sent
+        if should_notify_seen:
+            message.seen_notification_sent = True
+
         await self._session.flush()
-        return message
+
+        viewer_is_recipient = viewer.id == conversation.recipient_user_id
+        is_blocked = False
+        if viewer_is_recipient:
+            is_blocked = await self._blocks.is_blocked(
+                viewer.id, conversation.sender_anonymous_id
+            )
+
+        return ViewResult(
+            message_id=message.id,
+            conversation_id=conversation.id,
+            safe_text=message.text or "",
+            author_label=author_label,
+            author_user_id=author_id,
+            is_reply=not is_to_recipient,
+            should_notify_seen=should_notify_seen,
+            viewer_is_recipient=viewer_is_recipient,
+            is_blocked=is_blocked,
+        )

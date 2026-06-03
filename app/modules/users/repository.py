@@ -1,7 +1,7 @@
 """Data access for users."""
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.users.models import User
@@ -25,6 +25,23 @@ class UserRepository:
             select(User).where(User.public_token == token)
         )
         return result.scalar_one_or_none()
+
+    async def get_by_username_snapshot(self, normalized_username: str) -> User | None:
+        """Case-insensitive lookup by stored Telegram username.
+
+        ``normalized_username`` must already be lowercased and without ``@``.
+        Only active members are matched. Returns the most recently updated match.
+        """
+        result = await self._session.execute(
+            select(User)
+            .where(
+                func.lower(User.username_snapshot) == normalized_username,
+                User.is_active.is_(True),
+            )
+            .order_by(User.updated_at.desc())
+            .limit(1)
+        )
+        return result.scalars().first()
 
     async def exists_anonymous_id(self, anonymous_id: str) -> bool:
         result = await self._session.execute(

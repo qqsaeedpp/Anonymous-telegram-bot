@@ -10,9 +10,14 @@ from app.database.base import Base, BigIntPk, TimestampMixin
 class User(Base, TimestampMixin):
     """A bot user.
 
-    - ``telegram_id`` is the real (private) Telegram id; never exposed to others.
-    - ``anonymous_id`` is the label shown to recipients to correlate a sender.
+    - ``telegram_id`` is the real (private) Telegram id; only ever used
+      internally — never exposed to other users.
+    - ``anonymous_id`` is the numeric label shown to recipients to correlate a
+      sender. Random, never derived from telegram_id.
     - ``public_token`` is embedded in the user's shareable deep link (rotatable).
+    - ``username_snapshot`` is a copy of the user's Telegram @username, used ONLY
+      to find members via the "send message" button. Never shown in anonymous
+      messages.
     """
 
     __tablename__ = "users"
@@ -27,7 +32,15 @@ class User(Base, TimestampMixin):
     public_token: Mapped[str] = mapped_column(
         String(64), unique=True, index=True, nullable=False
     )
-    username: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    # Snapshots of the Telegram profile (kept fresh on each /start).
+    # username_snapshot is indexed because it is the lookup key for the
+    # username-based send flow. It is NOT exposed in any anonymous message.
+    username_snapshot: Mapped[str | None] = mapped_column(
+        String(64), index=True, nullable=True
+    )
+    first_name_snapshot: Mapped[str | None] = mapped_column(String(128), nullable=True)
+
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     # Lightweight per-user settings (e.g. seen notifications on/off).

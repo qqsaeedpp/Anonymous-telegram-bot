@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.bot.callbacks import BlockCancelCb, BlockCb, BlockConfirmCb, UnblockCb
 from app.bot.keyboards.block_confirm import block_confirm_keyboard
-from app.bot.keyboards.message_actions import seen_only_keyboard
+from app.bot.keyboards.message_actions import after_view_keyboard
 from app.bot.texts import fa
 from app.modules.blocks.service import BlockService
 from app.modules.conversations.models import Conversation
@@ -102,7 +102,9 @@ async def on_unblock(
     await BlockService(session).unblock_from_conversation(conversation)
     try:
         await query.message.edit_reply_markup(
-            reply_markup=seen_only_keyboard(conversation.id, blocked=False)
+            reply_markup=after_view_keyboard(
+                conversation.id, can_block=True, blocked=False
+            )
         )
     except Exception:  # noqa: BLE001
         pass
