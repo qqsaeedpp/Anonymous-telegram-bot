@@ -1,0 +1,38 @@
+[project]
+name = "anonymous-telegram-bot"
+version = "0.1.0"
+description = "Anonymous messaging Telegram bot (aiogram 3 + SQLAlchemy 2 async)"
+requires-python = ">=3.11"
+dependencies = [
+    "aiogram==3.15.0",
+    "SQLAlchemy[asyncio]==2.0.36",
+    "aiosqlite==0.20.0",
+    "alembic==1.14.0",
+    "pydantic==2.9.2",
+    "pydantic-settings==2.6.1",
+]
+
+[project.optional-dependencies]
+postgres = ["asyncpg==0.30.0"]
+dev = [
+    "pytest==8.3.4",
+    "pytest-asyncio==0.25.0",
+    "ruff==0.8.4",
+    "mypy==1.14.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_unused_ignores = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
