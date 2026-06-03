@@ -10,6 +10,7 @@ from aiogram.types import CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.bot.callbacks import BlockCancelCb, BlockCb, BlockConfirmCb, UnblockCb
+from app.bot.edit_utils import safe_edit
 from app.bot.keyboards.block_confirm import block_confirm_keyboard
 from app.bot.keyboards.message_actions import after_view_keyboard
 from app.bot.texts import fa
@@ -44,7 +45,9 @@ async def on_block_request(
     if conversation is None:
         await query.answer(fa.CONVERSATION_NOT_FOUND, show_alert=True)
         return
-    await query.message.answer(
+    # Edit in place into a confirm/cancel prompt instead of stacking a message.
+    await safe_edit(
+        query,
         fa.BLOCK_CONFIRM_PROMPT,
         reply_markup=block_confirm_keyboard(conversation.id),
     )
@@ -65,10 +68,7 @@ async def on_block_confirm(
         await query.answer(fa.CONVERSATION_NOT_FOUND, show_alert=True)
         return
     await BlockService(session).block_from_conversation(conversation)
-    try:
-        await query.message.edit_text(fa.BLOCKED_DONE)
-    except Exception:  # noqa: BLE001
-        await query.message.answer(fa.BLOCKED_DONE)
+    await safe_edit(query, fa.BLOCKED_DONE)
     await query.answer()
 
 
@@ -79,10 +79,7 @@ async def on_block_cancel(
     session: AsyncSession,
     user: User,
 ) -> None:
-    try:
-        await query.message.edit_text(fa.BLOCK_CANCELLED)
-    except Exception:  # noqa: BLE001
-        pass
+    await safe_edit(query, fa.BLOCK_CANCELLED)
     await query.answer()
 
 

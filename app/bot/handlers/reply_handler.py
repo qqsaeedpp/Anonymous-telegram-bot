@@ -9,6 +9,7 @@ from aiogram.types import CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.bot.callbacks import ReplyCb
+from app.bot.edit_utils import safe_edit
 from app.bot.texts import fa
 from app.modules.conversations.service import ConversationService
 from app.modules.states.service import StateService
@@ -36,5 +37,6 @@ async def on_reply(
         return
 
     await StateService(session).set_replying(user.id, conversation.id)
-    await query.message.answer(fa.REPLY_PROMPT)
+    # Edit in place: replace the revealed message with the reply prompt.
+    await safe_edit(query, fa.REPLY_PROMPT)
     await query.answer()

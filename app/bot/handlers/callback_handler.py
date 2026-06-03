@@ -11,6 +11,7 @@ from aiogram.types import CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.bot.callbacks import ViewCb
+from app.bot.edit_utils import safe_edit
 from app.bot.keyboards.message_actions import after_view_keyboard
 from app.bot.texts import fa
 from app.modules.messages.service import MessageService
@@ -48,10 +49,7 @@ async def on_view(
         can_block=result.viewer_is_recipient,
         blocked=result.is_blocked,
     )
-    try:
-        await query.message.edit_text(body, reply_markup=keyboard)
-    except Exception:  # noqa: BLE001 - edit may fail if content is unchanged
-        pass
+    await safe_edit(query, body, reply_markup=keyboard)
 
     # Notify the author exactly once, and only if they opted in.
     if result.should_notify_seen:

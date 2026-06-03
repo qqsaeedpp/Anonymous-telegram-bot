@@ -11,6 +11,8 @@ from aiogram.types import CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.bot.callbacks import GetMyLinkCb, SendMessageCb
+from app.bot.edit_utils import safe_edit
+from app.bot.keyboards.main_menu import main_menu_keyboard
 from app.bot.texts import fa
 from app.config.settings import Settings
 from app.modules.states.service import StateService
@@ -31,7 +33,8 @@ async def on_get_my_link(
     if not user.public_token:
         await UserService(session).rotate_public_token(user)
     link = settings.deep_link(user.public_token)
-    await query.message.answer(fa.your_link(link))
+    # Edit the menu in place; keep the buttons so the message stays usable.
+    await safe_edit(query, fa.your_link(link), reply_markup=main_menu_keyboard())
     await query.answer()
 
 
@@ -42,5 +45,6 @@ async def on_send_message(
     user: User,
 ) -> None:
     await StateService(session).set_waiting_for_target_username(user.id)
-    await query.message.answer(fa.ASK_TARGET_USERNAME)
+    # Replace the menu with the prompt; we now expect a typed username.
+    await safe_edit(query, fa.ASK_TARGET_USERNAME)
     await query.answer()
