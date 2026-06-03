@@ -24,9 +24,11 @@ WELCOME = (
 
 
 def your_link(link: str) -> str:
+    # <code> renders as tap-to-copy in Telegram (HTML parse mode).
     return (
         "🔗 لینک پیام ناشناس شما:\n\n"
-        f"{link}\n\n"
+        f"<code>{link}</code>\n\n"
+        "روی لینک بزنید تا کپی شود. "
         "هر کسی با این لینک می‌تواند به‌صورت ناشناس برای شما پیام بفرستد."
     )
 

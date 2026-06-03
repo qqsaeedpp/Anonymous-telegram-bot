@@ -33,8 +33,13 @@ async def on_get_my_link(
     if not user.public_token:
         await UserService(session).rotate_public_token(user)
     link = settings.deep_link(user.public_token)
-    # Edit the menu in place; keep the buttons so the message stays usable.
-    await safe_edit(query, fa.your_link(link), reply_markup=main_menu_keyboard())
+    # Edit in place and drop the "my link" button so it can't be tapped again
+    # (prevents chat clutter); keep the "send message" button available.
+    await safe_edit(
+        query,
+        fa.your_link(link),
+        reply_markup=main_menu_keyboard(include_my_link=False),
+    )
     await query.answer()
 
 
