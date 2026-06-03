@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 
 from aiogram import Bot, Dispatcher
+from aiogram.client.session.aiohttp import AiohttpSession
 
 from app.bot.handlers import build_root_router
 from app.bot.middlewares.db_session_middleware import DbSessionMiddleware
@@ -32,8 +33,15 @@ async def run() -> None:
     # For MVP we auto-create tables; switch to Alembic migrations in production.
     await create_all()
 
-    # Bot & dispatcher
-    bot = Bot(token=settings.bot_token, default=default_bot_properties())
+    # Bot & dispatcher. Route through a proxy if configured (for blocked networks).
+    session = AiohttpSession(proxy=settings.telegram_proxy) if settings.telegram_proxy else None
+    if session is not None:
+        logger.info("Using proxy for Telegram API.")
+    bot = Bot(
+        token=settings.bot_token,
+        default=default_bot_properties(),
+        session=session,
+    )
     dp = Dispatcher()
 
     # Inject shared dependencies into handler data.

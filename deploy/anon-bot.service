@@ -1,0 +1,21 @@
+[Unit]
+Description=Anonymous Telegram Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Adjust User/WorkingDirectory to match your server.
+User=anonbot
+WorkingDirectory=/opt/anon-bot
+# Use the virtualenv's Python and load variables from the .env file.
+EnvironmentFile=/opt/anon-bot/.env
+ExecStart=/opt/anon-bot/.venv/bin/python main.py
+Restart=always
+RestartSec=5
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

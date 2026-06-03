@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     # Telegram
     bot_token: str = Field(..., alias="BOT_TOKEN")
     bot_username: str = Field(..., alias="BOT_USERNAME")
+    # Optional proxy for reaching api.telegram.org when direct access is blocked.
+    # Examples: socks5://127.0.0.1:1080  |  http://127.0.0.1:8080
+    telegram_proxy: str | None = Field(default=None, alias="TELEGRAM_PROXY")
 
     # Database
     database_url: str = Field(
